@@ -30,6 +30,7 @@ class Integration():
 
         self.ike_token = self.get_ike_token()['token']
         recieved_trackor_types = self.get_trackor_types()
+        revieved_field_mapping = self.get_field_mapping()
         field_list = []
         for ike_job in self.get_ike_job():
             candidate_letter = re.split('_',ike_job['candidate_name'])
@@ -48,7 +49,7 @@ class Integration():
                     if letter_search is None:
                         self.create_log('Warning', 'Incorrect candidate name specified - ' + inf_value + ' - for Job - ' + ike_job['candidate_name'])
                     elif letter_search is not None and inf_value == candidate_letter:
-                        for field_mapping in self.get_field_mapping():
+                        for field_mapping in revieved_field_mapping:
                             inf_value = None
                             inf_v = ''
                             ike_field = field_mapping['IFM_IKE_FIELD_NAME']
