@@ -1,0 +1,9 @@
+{
+    "urlOneVizion" : "url",
+    "loginOneVizion" : "login",
+    "passOneVizion" : "password",
+
+    "urlIKE" : "url",
+    "loginIKE" : "login",
+    "passIKE" : "password"
+}
