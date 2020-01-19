@@ -154,7 +154,7 @@ class Integration():
                             if re.search(r'^[A-Z]|[a-z]$',collect['value']) is None:
                                 self.create_log('Warning', 'Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
                             else:
-                                job_updated = datetime.strptime(ike_collection['updatedAt'], '%Y-%m-%dT%H:%M:%S.%f%z').strftime('%Y-%m-%dT%H:%M:%S')
+                                job_updated = datetime.strptime(re.split('\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
                                 inf_value = ike_job['job_name'] + '_' + collect['value'].title()
                                 job_list.append({'candidate_name':inf_value, 'job_updated':job_updated, 'ike_collection':ike_collection})
                             break
