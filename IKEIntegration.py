@@ -38,10 +38,10 @@ class Integration():
 
         recieved_trackor_types = self.get_trackor_types()
         job_list = self.get_ike_job(form_id_list)
-        candidates_info = self.get_candidates(job_list)
+        candidates_info = self.work_with_joblist(job_list)
 
         field_list = []
-        if len(candidates_info) > 0:
+        if candidates_info != None:
             for candidate_info in candidates_info:
                 for field_mapping in revieved_field_mapping:
                     inf_v = ''
@@ -154,7 +154,7 @@ class Integration():
                             if re.search(r'^[A-Z]|[a-z]$',collect['value']) is None:
                                 self.create_log('Warning', 'Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
                             else:
-                                job_updated = datetime.strptime(re.split('\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
+                                job_updated = datetime.strptime(re.split(r'\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
                                 inf_value = ike_job['job_name'] + '_' + collect['value'].title()
                                 job_list.append({'candidate_name':inf_value, 'job_updated':job_updated, 'ike_collection':ike_collection})
                             break
@@ -175,12 +175,53 @@ class Integration():
         response = answer.json()
         return response
 
-    def get_candidates(self, job_list):
+    def work_with_joblist(self, job_list):
         candidate_names = ''
+        get_candidate = ''
+        get_candidate_list = []
         candidate_list = []
+        i = 0
+        len_job_list = len(job_list)
         for job in job_list:
-            candidate_names = job['candidate_name'] + ',' + candidate_names
+            if len_job_list > 150:
+                candidate_names = job['candidate_name'] + ',' + candidate_names
+                i = i + 1
+            else:
+                candidate_names = job['candidate_name'] + ',' + candidate_names
 
+            if i == 150:
+                get_candidate = self.get_candidates(candidate_names, get_candidate_list)
+                len_job_list = len_job_list - i
+                candidate_names = ''
+                i = 0
+
+        if get_candidate == None:
+            return None
+
+        if candidate_names != '':
+            get_candidate = self.get_candidates(candidate_names, get_candidate_list)
+        
+        if get_candidate == None:
+            return None
+
+        for job in job_list:
+            j = 0
+            for candidate in get_candidate_list:
+                if candidate['C_CANDIDATE_NAME'] in job['candidate_name']:
+                    if candidate['IKE_Checklists.IKE_UPDATED_AT'] != job['job_updated']:
+                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT'], 'ike_collection':job['ike_collection']})
+                    j = 1
+                    break
+            if j == 0:
+                self.create_log('Warning', 'Candidate - ' + job['candidate_name'] + ' - missing in espeed')
+
+        get_candidate_list.clear()
+        if len(candidate_list) > 0:
+            return candidate_list
+        else:
+            return None
+
+    def get_candidates(self, candidate_names, get_candidate_list):
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/candidate/trackors'
         data = {'fields':'TRACKOR_KEY, C_CANDIDATE_NAME, IKE_Checklists.IKE_UPDATED_AT', 'C_CANDIDATE_NAME':candidate_names[:-1]}
         answer = requests.get(url, headers=self.headers, params=data, auth=self.auth_onevizion)
@@ -188,18 +229,11 @@ class Integration():
             self.create_log('Warning', answer.text)
             return None
         else:
-            for job in job_list:
-                i = 0
-                for resp in answer.json():
-                    if resp['C_CANDIDATE_NAME'] in job['candidate_name']:
-                        if resp['IKE_Checklists.IKE_UPDATED_AT'] != job['job_updated']:
-                            candidate_list.append({'TRACKOR_KEY':resp['TRACKOR_KEY'], 'C_CANDIDATE_NAME':resp['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':resp['IKE_Checklists.IKE_UPDATED_AT'], 'ike_collection':job['ike_collection']})
-                        i = 1
-                        break
-                if i == 0:
-                    self.create_log('Warning', 'Candidate - ' + job['candidate_name'] + ' - missing in espeed')
+            cadidates = answer.json()
+            for candidate in cadidates:
+                get_candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
 
-            return candidate_list
+            return get_candidate_list
 
     def work_with_value(self, inf_v, field_mapping, ike_field, ike_collection, field_list, inf_name_id, ike_name_id, recieved_trackor_types):
         inf_value = None
