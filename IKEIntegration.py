@@ -283,7 +283,9 @@ class Integration():
                 inf_value = collect['imageUrl']
                 break
             elif re.search(inf_v, collect['id']) is not None and collect['type'] == 'truesize':
-                inf_value = collect['compositeUrl'].replace('meters', 'feet')
+                inf_value = collect['compositeUrl']
+                if re.search('meters', inf_value) is not None:
+                    inf_value = inf_value.replace('meters', 'feet')
                 break
 
         if len(inf_value) > 0:
