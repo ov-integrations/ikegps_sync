@@ -48,6 +48,7 @@ class Integration():
                     inf_name_id = None
                     ike_name_id = None
                     ike_field = field_mapping['IFM_IKE_FIELD_NAME']
+                    self.ike_title = field_mapping['IFM_TITLE_NAME']
                     for collect in candidate_info['ike_collection']['fields']:
                         if re.search(ike_field, collect['field']) is not None:
                             if collect['value'] != None:
@@ -114,7 +115,7 @@ class Integration():
 
     def get_field_mapping(self):
         self.fm_list_request.read(
-                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FIELD_NAME', 'IFM_IKE_FORM_ID']
+                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_TITLE_NAME']
                 )
         response = self.fm_list_request.jsonData
 
@@ -244,7 +245,7 @@ class Integration():
                 inf_value = str(inf_v['latitude'])
             elif 'nestedlist' in ike_field and len(inf_v) > 0:
                 for title in inf_v:
-                    if 'Pole Owner' in title['title']:
+                    if self.ike_title in title['title']:
                         inf_value = title['value']
                         break
             elif 'selectlist' in ike_field and 'title' in inf_v:
