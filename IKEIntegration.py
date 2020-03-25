@@ -7,11 +7,9 @@ import json
 from datetime import datetime, timedelta
 
 class Integration():
-    
-    def __init__(self, process_id = "", url_onevizion="", login_onevizion="", pass_onevizion="", url_ike="", login_ike="", pass_ike=""):
+
+    def __init__(self, url_onevizion="", login_onevizion="", pass_onevizion="", url_ike="", login_ike="", pass_ike=""):
         self.url_onevizion = self.url_setting(url_onevizion)
-        self.login_onevizion = login_onevizion
-        self.pass_onevizion = pass_onevizion
         self.auth_onevizion = HTTPBasicAuth(login_onevizion, pass_onevizion)
 
         self.url_ike = self.url_setting(url_ike)
@@ -21,27 +19,44 @@ class Integration():
         self.fm_list_request = onevizion.Trackor(trackorType='ike_field_mapping', URL=self.url_onevizion, userName=login_onevizion, password=pass_onevizion)
 
         self.headers = {'Content-type':'application/json','Content-Encoding':'utf-8'}
-        self.process_id = process_id
-
-        self.start_integration()
+        self.log = onevizion.TraceMessage
 
     def start_integration(self):
-        self.create_log('Info', 'Started integration')
+        self.log('Starting integration')
 
-        self.ike_token = self.get_ike_token()['token']
+        try:
+            self.ike_token = self.get_ike_token()
+        except Exception as e:
+            self.log('Failed to get_ike_token. Exception[%s]' % str(e))
+            raise SystemExit(0)
+        
+        try:
+            recieved_trackor_types = self.get_trackor_types()
+        except Exception as e:
+            self.log('Failed to get_trackor_types. Exception [%s]' % str(e))
+            raise SystemExit(0)
+
+        revieved_field_mapping = self.get_field_mapping()
+        if len(revieved_field_mapping) == 0:
+            raise SystemExit(0)
 
         form_id_list = []
-        revieved_field_mapping = self.get_field_mapping()
         for form in revieved_field_mapping:
             if form['IFM_IKE_FORM_ID'] not in form_id_list:
                 form_id_list.append(form['IFM_IKE_FORM_ID'])
 
-        recieved_trackor_types = self.get_trackor_types()
-        job_list = self.get_ike_job(form_id_list)
-        candidates_info = self.work_with_joblist(job_list)
+        try:
+            department_list = self.get_ike_department()
+        except Exception as e:
+            self.log('Failed to get_ike_department. Exception[%s]' % str(e))
+            raise SystemExit(0)
 
-        field_list = []
+        ike_job_list = self.work_with_ike_job(department_list)
+        collection_list = self.work_with_ike_collections(form_id_list, ike_job_list)
+        candidates_info = self.work_with_collectionlist(collection_list)
+
         if candidates_info != None:
+            field_list = []
             for candidate_info in candidates_info:
                 for field_mapping in revieved_field_mapping:
                     inf_v = ''
@@ -98,29 +113,30 @@ class Integration():
                     self.work_with_checklists(field_list)
                     field_list.clear()
                 else:
-                    self.create_log('Warning', 'No data / failed to select data for candidate - ' + candidate_info['C_CANDIDATE_NAME'])
+                    self.log('No data / failed to select data for Candidate ' + candidate_info['C_CANDIDATE_NAME'])
 
                 filelist = [f for f in os.listdir() if f.endswith('.jpeg')]
                 for f in filelist:
                     os.remove(os.path.join(f))
 
-        self.create_log('Info', 'Finished integration')
+        self.log('Integration has been completed')
 
     def get_ike_token(self):
         url = 'https://' + self.url_ike + '/v1/login'
         data = {'username':self.login_ike, 'password':self.pass_ike}
         answer = requests.post(url, data=json.dumps(data), headers={'Content-type':'application/json'})
-        response = answer.json()
-        return response
+        if answer.ok == True:
+            return answer.json()['token']
+        else:
+            raise Exception(answer.text)
 
     def get_field_mapping(self):
         self.fm_list_request.read(
                 fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_TITLE_NAME']
                 )
-        response = self.fm_list_request.jsonData
 
         fm_list = []
-        for field_mapping in response:
+        for field_mapping in self.fm_list_request.jsonData:
             fm_list.append(field_mapping)
 
         return fm_list
@@ -128,113 +144,150 @@ class Integration():
     def get_trackor_types(self):
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types'
         answer = requests.get(url, headers=self.headers, auth=self.auth_onevizion)
-        if answer.status_code != 200:
-            self.create_log('Warning', answer.text)
-        else:
+        if answer.ok == True:
             return answer.json()
+        else:
+            raise Exception(answer.text)
+            
+    def work_with_ike_job(self, department_list):
+        for department in department_list:
+            department_id = department['id']
 
-    def get_ike_job(self, form_id_list):
-        for deprtment in self.get_ike_department():
-            department_id = deprtment['id']
-
-            url = 'https://' + self.url_ike + '/v1/job.json'
-            data = {'departmentId':department_id}
-            answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
+            try:
+                ike_jobs = self.get_ike_job(department_id)
+            except Exception as e:
+                self.log('Failed to get_ike_job. Exception [%s]' % str(e))
+                raise SystemExit(0)
 
             ike_job_list = []
-            for job in answer.json():
+            for job in ike_jobs:
                 ike_job_list.append({'job_id':job['id'], 'job_name':job['name'], 'department_id':department_id})
 
+        department_list.clear()
+        return ike_job_list
+
+    def work_with_ike_collections(self, form_id_list, ike_job_list):
         job_list = []
-        for ike_job in ike_job_list:            
-            ike_collections = self.get_ike_collection(ike_job['department_id'], ike_job['job_id'])
+        incorrect_name_list = []
+        for ike_job in ike_job_list:
+            try:
+                ike_collections = self.get_ike_collection(ike_job['department_id'], ike_job['job_id'])
+            except Exception as e:
+                self.log('Failed to get_ike_collection. Exception [%s]' % str(e))
+                raise SystemExit(0)
+
             if ike_collections[0]['form']['id'] in form_id_list:
                 for ike_collection in ike_collections:
                     for collect in ike_collection['fields']:
                         if re.search('Candidate Name', collect['name']) is not None:
                             if re.search(r'^[A-Z]|[a-z]$',collect['value']) is None:
-                                self.create_log('Warning', 'Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
+                                incorrect_name_list.append('Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
                             else:
                                 job_updated = datetime.strptime(re.split(r'\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
                                 inf_value = ike_job['job_name'] + '_' + collect['value'].title()
                                 job_list.append({'candidate_name':inf_value, 'job_updated':job_updated, 'ike_collection':ike_collection})
                             break
-        ike_job_list.clear()
 
+        if len(incorrect_name_list) > 0:
+            self.log(incorrect_name_list)
+            incorrect_name_list.clear()
+        form_id_list.clear()
+        ike_job_list.clear()
         return job_list
 
     def get_ike_department(self):
         url = 'https://' + self.url_ike + '/v1/department.json'
         answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token})
-        response = answer.json()
-        return response
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
+    
+    def get_ike_job(self, department_id):
+        url = 'https://' + self.url_ike + '/v1/job.json'
+        data = {'departmentId':department_id}
+        answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
 
     def get_ike_collection(self, department_id, job_id):
         url = 'https://' + self.url_ike + '/v1/collection.json'
         data = {'departmentId':department_id, 'jobId':job_id}
         answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
-        response = answer.json()
-        return response
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
 
-    def work_with_joblist(self, job_list):
-        candidate_names = ''
-        get_candidate = ''
-        get_candidate_list = []
+    def work_with_collectionlist(self, collection_list):
         candidate_list = []
-        i = 0
-        len_job_list = len(job_list)
-        for job in job_list:
-            if len_job_list > 150:
-                candidate_names = job['candidate_name'] + ',' + candidate_names
-                i = i + 1
+        candidate_name_list = []
+        len_collection_list = len(collection_list)
+        len_candidate_name_list = 150
+        for collection in collection_list:
+            candidate_name_list.append(collection['candidate_name'])
+            
+            if len_collection_list < len_candidate_name_list:
+                if len(candidate_name_list) == len_collection_list:
+                    try:
+                        cadidates = self.get_candidates(candidate_name_list)
+                    except Exception as e:
+                        self.log('Failed to get_ike_collection. Exception [%s]' % str(e))
+                        raise SystemExit(0)
+
+                    for candidate in cadidates:
+                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
+                    candidate_name_list.clear()            
             else:
-                candidate_names = job['candidate_name'] + ',' + candidate_names
+                if len(candidate_name_list) == len_candidate_name_list:
+                    try:
+                        cadidates = self.get_candidates(candidate_name_list)
+                    except Exception as e:
+                        self.log('Failed to get_ike_collection. Exception [%s]' % str(e))
+                        raise SystemExit(0)
 
-            if i == 150:
-                get_candidate = self.get_candidates(candidate_names, get_candidate_list)
-                len_job_list = len_job_list - i
-                candidate_names = ''
-                i = 0
+                    for candidate in cadidates:
+                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
+                    len_collection_list = len_collection_list - len_candidate_name_list
+                    candidate_name_list.clear()
 
-        if get_candidate == None:
-            return None
-
-        if candidate_names != '':
-            get_candidate = self.get_candidates(candidate_names, get_candidate_list)
-        
-        if get_candidate == None:
-            return None
-
-        for job in job_list:
+        ike_candidate_list = []
+        candidate_missing_list = []
+        for collection in collection_list:
             j = 0
-            for candidate in get_candidate_list:
-                if candidate['C_CANDIDATE_NAME'] in job['candidate_name']:
-                    if candidate['IKE_Checklists.IKE_UPDATED_AT'] != job['job_updated']:
-                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT'], 'ike_collection':job['ike_collection']})
+            for candidate in candidate_list:
+                if candidate['C_CANDIDATE_NAME'] in collection['candidate_name']:
+                    if candidate['IKE_Checklists.IKE_UPDATED_AT'] != collection['job_updated']:
+                        ike_candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT'], 'ike_collection':collection['ike_collection']})
                     j = 1
                     break
             if j == 0:
-                self.create_log('Warning', 'Candidate - ' + job['candidate_name'] + ' - missing in espeed')
+                candidate_missing_list.append('Candidate - ' + collection['candidate_name'] + ' - missing in espeed')
 
-        get_candidate_list.clear()
-        if len(candidate_list) > 0:
-            return candidate_list
+        if len(candidate_missing_list) > 0:
+            self.log(candidate_missing_list)
+            candidate_missing_list.clear()
+
+        candidate_list.clear()
+        if len(ike_candidate_list) > 0:
+            return ike_candidate_list
         else:
             return None
 
-    def get_candidates(self, candidate_names, get_candidate_list):
+    def get_candidates(self, candidate_name_list):
+        candidate_names = ''
+        for cand in candidate_name_list:
+            candidate_names = cand + ',' + candidate_names
+
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/candidate/trackors'
         data = {'fields':'TRACKOR_KEY, C_CANDIDATE_NAME, IKE_Checklists.IKE_UPDATED_AT', 'C_CANDIDATE_NAME':candidate_names[:-1]}
         answer = requests.get(url, headers=self.headers, params=data, auth=self.auth_onevizion)
-        if answer.status_code != 200:
-            self.create_log('Warning', answer.text)
-            return None
+        if answer.ok == True:
+            return answer.json()
         else:
-            cadidates = answer.json()
-            for candidate in cadidates:
-                get_candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
-
-            return get_candidate_list
+            raise Exception(answer.text)
 
     def work_with_value(self, inf_v, field_mapping, ike_field, ike_collection, field_list, inf_name_id, ike_name_id, recieved_trackor_types):
         inf_value = None
@@ -304,9 +357,14 @@ class Integration():
     def work_with_checklists(self, field_list):
         candidate_id = 0
         candidate_name = None
+        data_checklists = []
         for field_data in field_list:
             if re.search('Candidate.TRACKOR_KEY', field_data['trackor_type']) is not None:
-                data_checklists = self.get_checklist(field_data['field_value'])
+                try:
+                    data_checklists = self.get_checklist(field_data['field_value'])
+                except Exception as e:
+                    self.log('Failed to get_checklist. Exception [%s]' % str(e))
+
                 if len(data_checklists) > 0:
                     candidate_id = data_checklists[0]['TRACKOR_ID']
                     candidate_name = data_checklists[0]['TRACKOR_KEY']
@@ -381,92 +439,113 @@ class Integration():
                 image_list.append({'trackor_type':re.split('IKE_image.', field_data['trackor_type'])[1], 'file_name':field_data['field_value']})
 
         if len(checklists_dict) > 0 and len(candidate_dict) > 0 and candidate_id == 0 and candidate_name == None:
-            answer = self.create_trackors('IKE_Checklists', checklists_dict, 'Candidate', candidate_dict)
-            if answer.status_code != 201:
-                self.create_log('Warning', str(candidate_dict['Candidate.TRACKOR_KEY']) + ' - ' +  answer.text)
-            else:
-                candidate_id = answer.json()['TRACKOR_ID']
-                candidate_name = answer.json()['TRACKOR_KEY']
+            try:
+                answer = self.create_trackors('IKE_Checklists', checklists_dict, 'Candidate', candidate_dict)
+            except Exception as e:
+                self.log('Failed to create IKE Checklist for ' + str(candidate_dict['Candidate.TRACKOR_KEY']) + '. Exception [%s]' % str(e))
+                answer = None
+
+            if answer != None:
+                candidate_id = answer['TRACKOR_ID']
+                candidate_name = answer['TRACKOR_KEY']
                 candidate_dict.clear()
                 checklists_dict.clear()
 
         if candidate_id != 0:
-            if len(checklists_dict) > 0: 
-                url = 'https://' + self.url_onevizion + '/api/v3/trackors/' + str(candidate_id)
-                data = checklists_dict
-                answer = requests.put(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
-                if answer.status_code != 200:
-                    self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
-                
+            if len(checklists_dict) > 0:
+                try:
+                    self.update_checklist_data(candidate_id, checklists_dict)
+                except Exception as e:
+                    self.log('Failed to update IKE Checklist for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+
                 checklists_dict.clear()
 
             if len(image_list) > 0:
                 for image_file in image_list:
-                    url = 'https://' + self.url_onevizion + '/api/v3/trackor/' + str(candidate_id) + '/file/' + image_file['trackor_type']
-                    data = {'file_name':image_file['file_name']}
-                    files = {'file':(image_file['file_name'], open(image_file['file_name'], 'rb'))}
-                    answer = requests.post(url, files=files, params=data, headers={'Accept':'application/json'}, auth=self.auth_onevizion)
-                    if answer.status_code != 200:
-                        self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
-                    
+                    try:
+                        self.attach_image_file(candidate_id, image_file)
+                    except Exception as e:
+                        self.log('Failed to attach image file for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+
                 image_list.clear()
 
         if candidate_name != None:                    
             if len(placement_list) > 0:
                 for pl in placement_list:
                     pl.pop('ike_id', None)
-                    answer = self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
-                    if answer.status_code != 201:
-                        self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
+                    try:
+                        self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                    except Exception as e:
+                        self.log('Failed to create IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
                 placement_list.clear()
 
             if len(anchors_list) > 0:
                 for al in anchors_list:
                     al.pop('ike_id', None)
-                    answer = self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
-                    if answer.status_code != 201:
-                        self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
+                    try:
+                        self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                    except Exception as e:
+                        self.log('Failed to create IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
                 anchors_list.clear()
 
             if len(spans_list) > 0:
                 for sl in spans_list:
                     sl.pop('ike_id', None)
-                    answer = self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
-                    if answer.status_code != 201:
-                        self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
+                    try:
+                        self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                    except Exception as e:
+                        self.log('Failed to create IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
                 spans_list.clear()
 
             if len(equipment_list) > 0:
                 for el in equipment_list:
                     el.pop('ike_id', None)
-                    answer = self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
-                    if answer.status_code != 201:
-                        self.create_log('Warning', str(candidate_name) + ' - ' + answer.text)
+                    try:
+                        self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                    except Exception as e:
+                        self.log('Failed to create IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
                 equipment_list.clear()
+
+    def update_checklist_data(self, candidate_id, checklists_dict):
+        url = 'https://' + self.url_onevizion + '/api/v3/trackors/' + str(candidate_id)
+        data = checklists_dict
+        answer = requests.put(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
+
+    def attach_image_file(self, candidate_id, image_file):
+        url = 'https://' + self.url_onevizion + '/api/v3/trackor/' + str(candidate_id) + '/file/' + image_file['trackor_type']
+        data = {'file_name':image_file['file_name']}
+        files = {'file':(image_file['file_name'], open(image_file['file_name'], 'rb'))}
+        answer = requests.post(url, files=files, params=data, headers={'Accept':'application/json'}, auth=self.auth_onevizion)
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
 
     def get_checklist(self, candidate_id):
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/IKE_Checklists/trackors'
         data = {'Candidate.TRACKOR_KEY':candidate_id}
         answer = requests.get(url, headers=self.headers, params=data, auth=self.auth_onevizion)
-        if answer.status_code != 200:
-            self.create_log('Warning', answer.text)
-        else:
+        if answer.ok == True:
             return answer.json()
+        else:
+            raise Exception(answer.text)
 
     def create_trackors(self, chield_trackor, chield_dict, parent_trackor, parent_dict):
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/' + chield_trackor + '/trackors'
         data = {'fields':chield_dict, 'parents':[{'trackor_type':parent_trackor, 'filter':parent_dict}]}
         answer = requests.post(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
-        return answer
-
-    def create_log(self, log_level_name, message_log):
-        url = 'https://' + self.url_onevizion + '/api/v3/integrations/runs/' + str(self.process_id) + '/logs'
-        data = {'message':message_log, 'log_level_name':log_level_name}
-        requests.post(url, headers=self.headers, data=json.dumps(data), auth=self.auth_onevizion)
+        if answer.ok == True:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
 
     def url_setting(self, url):
         url_re_start = re.search('^https', url)
