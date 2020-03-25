@@ -515,7 +515,7 @@ class Integration():
         data = checklists_dict
         answer = requests.put(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
         if answer.ok == True:
-            return answer.json()
+            return answer
         else:
             raise Exception(answer.text)
 
@@ -525,7 +525,7 @@ class Integration():
         files = {'file':(image_file['file_name'], open(image_file['file_name'], 'rb'))}
         answer = requests.post(url, files=files, params=data, headers={'Accept':'application/json'}, auth=self.auth_onevizion)
         if answer.ok == True:
-            return answer.json()
+            return answer
         else:
             raise Exception(answer.text)
 
