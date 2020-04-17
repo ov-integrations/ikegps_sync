@@ -12,5 +12,5 @@ url_ike = password_data["urlIKE"]
 login_ike = password_data["loginIKE"]
 pass_ike = password_data["passIKE"]
 
-ike_integration = Integration(url_onevizion=url_onevizion, login_onevizion=login_onevizion, pass_onevizion=pass_onevizion, url_ike=url_ike, login_ike=login_ike, pass_ike=pass_ike)
+ike_integration = Integration(url_onevizion, login_onevizion, pass_onevizion, url_ike, login_ike, pass_ike)
 ike_integration.start_integration()

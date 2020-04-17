@@ -23,27 +23,22 @@ class Integration():
 
     def start_integration(self):
         self.log('Starting integration')
+        revieved_field_mapping = self.get_field_mapping()
+        if len(revieved_field_mapping) == 0:
+            raise SystemExit(0)
 
+        ike_data = self.work_with_get_ike_data(revieved_field_mapping)
+
+        if ike_data != None:
+            self.work_with_ike_data(ike_data, revieved_field_mapping)
+        self.log('Integration has been completed')
+
+    def work_with_get_ike_data(self, revieved_field_mapping):
         try:
             self.ike_token = self.get_ike_token()
         except Exception as e:
             self.log('Failed to get_ike_token. Exception[%s]' % str(e))
             raise SystemExit(0)
-        
-        try:
-            recieved_trackor_types = self.get_trackor_types()
-        except Exception as e:
-            self.log('Failed to get_trackor_types. Exception [%s]' % str(e))
-            raise SystemExit(0)
-
-        revieved_field_mapping = self.get_field_mapping()
-        if len(revieved_field_mapping) == 0:
-            raise SystemExit(0)
-
-        form_id_list = []
-        for form in revieved_field_mapping:
-            if form['IFM_IKE_FORM_ID'] not in form_id_list:
-                form_id_list.append(form['IFM_IKE_FORM_ID'])
 
         try:
             department_list = self.get_ike_department()
@@ -52,104 +47,30 @@ class Integration():
             raise SystemExit(0)
 
         ike_job_list = self.work_with_ike_job(department_list)
-        collection_list = self.work_with_ike_collections(form_id_list, ike_job_list)
-        candidates_info = self.work_with_collectionlist(collection_list)
+        collection_list = self.work_with_ike_collections(ike_job_list, revieved_field_mapping)
+        candidates_info = self.get_candidates_info(collection_list)
 
-        if candidates_info != None:
-            field_list = []
-            for candidate_info in candidates_info:
-                for field_mapping in revieved_field_mapping:
-                    inf_v = ''
-                    inf_name_id = None
-                    ike_name_id = None
-                    ike_field = field_mapping['IFM_IKE_FIELD_NAME']
-                    self.ike_title = field_mapping['IFM_TITLE_NAME']
-                    for collect in candidate_info['ike_collection']['fields']:
-                        if re.search(ike_field, collect['field']) is not None:
-                            if collect['value'] != None:
-                                if isinstance(collect['value'], float) == True or isinstance(collect['value'], bool) == True:
-                                    inf_v = str(collect['value'])
-                                else:
-                                    inf_v = collect['value']
-                                self.work_with_value(inf_v, field_mapping, ike_field, candidate_info['ike_collection'], field_list, inf_name_id, ike_name_id, recieved_trackor_types)
-                        else:
-                            ike_name_value = collect['value']
-                            if isinstance(ike_name_value, list) and len(ike_name_value) > 0:
-                                for ike_nv in ike_name_value:
-                                    if 'fields' in ike_nv:
-                                        ike_name_vf = ike_nv['fields']
-                                        if isinstance(ike_name_vf, list) and len(ike_name_vf) > 0:
-                                            for inf in ike_name_vf:
-                                                if 'field' in inf:
-                                                    if re.search(ike_field, inf['field']) is not None:
-                                                        if inf['value'] != None:
-                                                            ike_name_id = ike_nv['id']
-                                                            if isinstance(inf['value'], float) == True or isinstance(inf['value'], bool) == True:
-                                                                inf_v = str(inf['value'])
-                                                            else:
-                                                                inf_v = inf['value']
-                                                            self.work_with_value(inf_v, field_mapping, ike_field, candidate_info['ike_collection'], field_list, inf_name_id, ike_name_id, recieved_trackor_types)
-                                                    else:
-                                                        inf_name_value = inf['value']
-                                                        if isinstance(inf_name_value, list) and len(inf_name_value) > 0:
-                                                            for inf_nv in inf_name_value:
-                                                                if 'fields' in inf_nv:
-                                                                    inf_name_vf = inf_nv['fields']
-                                                                    if isinstance(inf_name_vf, list) and len(inf_name_vf) > 0:
-                                                                        for inv in inf_name_vf:
-                                                                            if 'field' in inv:
-                                                                                if re.search(ike_field, inv['field']) is not None:
-                                                                                    if inv['value'] != None:
-                                                                                        inf_name_id = inf_nv['id']
-                                                                                        if isinstance(inv['value'], float) == True or isinstance(inv['value'], bool) == True:
-                                                                                            inf_v = str(inv['value'])
-                                                                                        else:
-                                                                                            inf_v = inv['value']
-                                                                                        self.work_with_value(inf_v, field_mapping, ike_field, candidate_info['ike_collection'], field_list, inf_name_id, ike_name_id, recieved_trackor_types)
-
-                if len(field_list) > 0:
-                    field_list.append({'ike_id':'', 'trackor_type':'Candidate.TRACKOR_KEY', 'field_value':candidate_info['TRACKOR_KEY']})
-                    field_list.append({'ike_id':'', 'trackor_type':'IKE_Checklists.IKE_UPDATED_AT', 'field_value':candidate_info['ike_collection']['updatedAt']})
-                    self.work_with_checklists(field_list)
-                    field_list.clear()
-                else:
-                    self.log('No data / failed to select data for Candidate ' + candidate_info['C_CANDIDATE_NAME'])
-
-                filelist = [f for f in os.listdir() if f.endswith('.jpeg')]
-                for f in filelist:
-                    os.remove(os.path.join(f))
-
-        self.log('Integration has been completed')
+        return candidates_info
 
     def get_ike_token(self):
         url = 'https://' + self.url_ike + '/v1/login'
         data = {'username':self.login_ike, 'password':self.pass_ike}
         answer = requests.post(url, data=json.dumps(data), headers={'Content-type':'application/json'})
-        if answer.ok == True:
+        if answer.ok:
             return answer.json()['token']
         else:
             raise Exception(answer.text)
 
-    def get_field_mapping(self):
-        self.fm_list_request.read(
-                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_TITLE_NAME']
-                )
-
-        fm_list = []
-        for field_mapping in self.fm_list_request.jsonData:
-            fm_list.append(field_mapping)
-
-        return fm_list
-
-    def get_trackor_types(self):
-        url = 'https://' + self.url_onevizion + '/api/v3/trackor_types'
-        answer = requests.get(url, headers=self.headers, auth=self.auth_onevizion)
-        if answer.ok == True:
+    def get_ike_department(self):
+        url = 'https://' + self.url_ike + '/v1/department.json'
+        answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token})
+        if answer.ok:
             return answer.json()
         else:
             raise Exception(answer.text)
-            
+
     def work_with_ike_job(self, department_list):
+        previous_week = str((datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%S'))
         for department in department_list:
             department_id = department['id']
 
@@ -161,14 +82,30 @@ class Integration():
 
             ike_job_list = []
             for job in ike_jobs:
-                ike_job_list.append({'job_id':job['id'], 'job_name':job['name'], 'department_id':department_id})
+                if job['updatedAt'] > previous_week:
+                    ike_job_list.append({'job_id':job['id'], 'job_name':job['name'], 'department_id':department_id})
 
         department_list.clear()
         return ike_job_list
 
-    def work_with_ike_collections(self, form_id_list, ike_job_list):
+    def get_ike_job(self, department_id):
+        url = 'https://' + self.url_ike + '/v1/job.json'
+        data = {'departmentId':department_id}
+        answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
+        if answer.ok:
+            return answer.json()
+        else:
+            raise Exception(answer.text)
+
+    def work_with_ike_collections(self, ike_job_list, revieved_field_mapping):
         job_list = []
         incorrect_name_list = []
+        
+        form_id_list = []
+        for form in revieved_field_mapping:
+            if form['IFM_IKE_FORM_ID'] not in form_id_list:
+                form_id_list.append(form['IFM_IKE_FORM_ID'])
+
         for ike_job in ike_job_list:
             try:
                 ike_collections = self.get_ike_collection(ike_job['department_id'], ike_job['job_id'])
@@ -180,48 +117,33 @@ class Integration():
                 for ike_collection in ike_collections:
                     for collect in ike_collection['fields']:
                         if re.search('Candidate Name', collect['name']) is not None:
-                            if re.search(r'^[A-Z]|[a-z]$',collect['value']) is None:
-                                incorrect_name_list.append('Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
+                            if len(collect['value']) == 1:
+                                if re.search(r'^[A-Z]|[a-z]$', collect['value']) is None:
+                                    incorrect_name_list.append('Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
+                                else:
+                                    job_updated = datetime.strptime(re.split(r'\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
+                                    inf_value = ike_job['job_name'] + '_' + collect['value'].title()
+                                    job_list.append({'candidate_name':inf_value, 'job_updated':job_updated, 'ike_collection':ike_collection})
                             else:
-                                job_updated = datetime.strptime(re.split(r'\.', ike_collection['updatedAt'])[0], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%dT%H:%M:%S')
-                                inf_value = ike_job['job_name'] + '_' + collect['value'].title()
-                                job_list.append({'candidate_name':inf_value, 'job_updated':job_updated, 'ike_collection':ike_collection})
+                                incorrect_name_list.append('Incorrect candidate name specified - ' + collect['value'] + ' - for Job - ' + ike_job['job_name'])
                             break
 
         if len(incorrect_name_list) > 0:
             self.log(incorrect_name_list)
             incorrect_name_list.clear()
-        form_id_list.clear()
         ike_job_list.clear()
         return job_list
-
-    def get_ike_department(self):
-        url = 'https://' + self.url_ike + '/v1/department.json'
-        answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token})
-        if answer.ok == True:
-            return answer.json()
-        else:
-            raise Exception(answer.text)
-    
-    def get_ike_job(self, department_id):
-        url = 'https://' + self.url_ike + '/v1/job.json'
-        data = {'departmentId':department_id}
-        answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
-        if answer.ok == True:
-            return answer.json()
-        else:
-            raise Exception(answer.text)
 
     def get_ike_collection(self, department_id, job_id):
         url = 'https://' + self.url_ike + '/v1/collection.json'
         data = {'departmentId':department_id, 'jobId':job_id}
         answer = requests.get(url, headers={'Content-type':'application/json', 'Authorization':'token ' + self.ike_token}, params=data)
-        if answer.ok == True:
+        if answer.ok:
             return answer.json()
         else:
             raise Exception(answer.text)
 
-    def work_with_collectionlist(self, collection_list):
+    def get_candidates_info(self, collection_list):
         candidate_list = []
         candidate_name_list = []
         len_collection_list = len(collection_list)
@@ -231,27 +153,11 @@ class Integration():
             
             if len_collection_list < len_candidate_name_list:
                 if len(candidate_name_list) == len_collection_list:
-                    try:
-                        cadidates = self.get_candidates(candidate_name_list)
-                    except Exception as e:
-                        self.log('Failed to get_ike_collection. Exception [%s]' % str(e))
-                        raise SystemExit(0)
-
-                    for candidate in cadidates:
-                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
-                    candidate_name_list.clear()            
+                    self.work_with_candidates(candidate_list, candidate_name_list)         
             else:
                 if len(candidate_name_list) == len_candidate_name_list:
-                    try:
-                        cadidates = self.get_candidates(candidate_name_list)
-                    except Exception as e:
-                        self.log('Failed to get_ike_collection. Exception [%s]' % str(e))
-                        raise SystemExit(0)
-
-                    for candidate in cadidates:
-                        candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT']})
+                    self.work_with_candidates(candidate_list, candidate_name_list)
                     len_collection_list = len_collection_list - len_candidate_name_list
-                    candidate_name_list.clear()
 
         ike_candidate_list = []
         candidate_missing_list = []
@@ -260,7 +166,7 @@ class Integration():
             for candidate in candidate_list:
                 if candidate['C_CANDIDATE_NAME'] in collection['candidate_name']:
                     if candidate['IKE_Checklists.IKE_UPDATED_AT'] != collection['job_updated']:
-                        ike_candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':candidate['IKE_Checklists.IKE_UPDATED_AT'], 'ike_collection':collection['ike_collection']})
+                        ike_candidate_list.append({'TRACKOR_KEY':candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME':candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT':collection['job_updated'], 'ike_collection':collection['ike_collection']})
                     j = 1
                     break
             if j == 0:
@@ -276,6 +182,18 @@ class Integration():
         else:
             return None
 
+    def work_with_candidates(self, candidate_list, candidate_name_list):
+        try:
+            cadidates = self.get_candidates(candidate_name_list)
+        except Exception as e:
+            self.log(
+                'Failed to get_candidates. Exception [%s]' % str(e))
+            raise SystemExit(0)
+
+        for candidate in cadidates:
+            candidate_list.append({'TRACKOR_KEY': candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME': candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT': candidate['IKE_Checklists.IKE_UPDATED_AT']})
+        candidate_name_list.clear()
+
     def get_candidates(self, candidate_name_list):
         candidate_names = ''
         for cand in candidate_name_list:
@@ -284,82 +202,153 @@ class Integration():
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/candidate/trackors'
         data = {'fields':'TRACKOR_KEY, C_CANDIDATE_NAME, IKE_Checklists.IKE_UPDATED_AT', 'C_CANDIDATE_NAME':candidate_names[:-1]}
         answer = requests.get(url, headers=self.headers, params=data, auth=self.auth_onevizion)
-        if answer.ok == True:
+        if answer.ok:
             return answer.json()
         else:
             raise Exception(answer.text)
 
-    def work_with_value(self, inf_v, field_mapping, ike_field, ike_collection, field_list, inf_name_id, ike_name_id, recieved_trackor_types):
-        inf_value = None
-        if len(inf_v) > 0:
-            if 'location' in ike_field and '_LONG' in field_mapping['IFM_ESPEED_FIELD_NAME'] and 'longitude' in inf_v:
-                inf_value = str(inf_v['longitude'])
-            elif 'location' in ike_field and '_LAT' in field_mapping['IFM_ESPEED_FIELD_NAME'] and 'latitude' in inf_v:
-                inf_value = str(inf_v['latitude'])
-            elif 'nestedlist' in ike_field and len(inf_v) > 0:
-                for title in inf_v:
-                    if self.ike_title in title['title']:
-                        inf_value = title['value']
-                        break
-            elif 'selectlist' in ike_field and 'title' in inf_v:
-                if inf_v['value'] != 'unselected':
-                    inf_value = inf_v['title']
-                else:
-                    inf_value = None
-            elif 'vector' in ike_field and 'distance' in inf_v:
-                inf_value = str(float(inf_v['distance']) / .3048)
-            elif 'image' in ike_field and len(inf_v) > 0:
-                inf_value = self.get_ike_image(inf_v[0], ike_collection['captures'])
-            elif 'truesizecapture' in ike_field and len(inf_v) > 0:
-                inf_value = self.get_ike_image(inf_v[0], ike_collection['captures'])
-            elif 'height' in ike_field and inf_v != None:
-                inf_value = str(float(inf_v) / .3048)
-            else: inf_value = inf_v.title()
+    def get_field_mapping(self):
+        self.fm_list_request.read(
+                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_IKE_FIELD_LABEL', 'IFM_TITLE_NAME']
+                )
 
-        if inf_value != None and 'IKE_image' in inf_value:
-            field_list.append({'ike_id':'', 'trackor_type':'IKE_image.' + field_mapping['IFM_ESPEED_FIELD_NAME'], 'field_value':re.split('IKE_image.', inf_value)[1]})
-        elif inf_value != None and 'IKE_image' not in inf_value:
-            for trackor_types in recieved_trackor_types:
-                if re.search(field_mapping['IFM_FIELD_TRACKOR_TYPE'], trackor_types['label']) is not None:
-                    trackor_type = trackor_types['name']
-                    break
-            
-            if inf_name_id != None:
-                field_list.append({'ike_id':inf_name_id, 'trackor_type':trackor_type + '.' + field_mapping['IFM_ESPEED_FIELD_NAME'], 'field_value':inf_value})
-            elif ike_name_id != None:
-                field_list.append({'ike_id':ike_name_id, 'trackor_type':trackor_type + '.' + field_mapping['IFM_ESPEED_FIELD_NAME'], 'field_value':inf_value})
+        fm_list = []
+        for field_mapping in self.fm_list_request.jsonData:
+            fm_list.append(field_mapping)
+
+        return fm_list
+
+    def work_with_ike_data(self, ike_data, revieved_field_mapping):
+        field_list = []
+        for candidate_info in ike_data:
+            ike_collection = candidate_info['ike_collection']
+            candidate_info_fields = ike_collection['fields']
+            candidate_info_captures = ike_collection['captures']
+            candidate_info_updated_at = ike_collection['updatedAt']
+            self.get_data_from_fields('', candidate_info_fields, field_list, revieved_field_mapping, candidate_info_captures)
+
+            if len(field_list) > 0:
+                field_list.append({'form_id':'', 'trackor_type':'Candidate', 'field_name':'TRACKOR_KEY', 'field_value':candidate_info['TRACKOR_KEY']})
+                field_list.append({'form_id':'', 'trackor_type':'IKE Checklists', 'field_name':'IKE_UPDATED_AT', 'field_value':candidate_info_updated_at})
+
+                self.work_with_checklists(field_list)
+                field_list.clear()
+                file_list = [f for f in os.listdir() if f.endswith('.jpeg')]
+                for f in file_list:
+                    os.remove(os.path.join(f))
             else:
-                field_list.append({'ike_id':'', 'trackor_type':trackor_type + '.' + field_mapping['IFM_ESPEED_FIELD_NAME'], 'field_value':inf_value})
+                self.log('No data / failed to select data for Candidate ' + candidate_info['C_CANDIDATE_NAME'])
+   
+    def get_data_from_fields(self, form_id, candidate_info_fields, field_list, revieved_field_mapping, candidate_info_captures):
+        candidate_info_fields.sort(key=lambda val: isinstance(val['value'], list))
+        for fields_info in candidate_info_fields:
+            field_name = fields_info['name']
+            field_type = fields_info['type']
+            field_value = fields_info['value']
+            if isinstance(field_value, list):
+                if len(field_value) > 0:
+                    for fields_in_field_value in field_value:
+                        if 'fields' in fields_in_field_value:
+                            form_id = fields_in_field_value['id']
+                            fields_in_value = fields_in_field_value['fields']
+                            self.get_data_from_fields(form_id, fields_in_value, field_list, revieved_field_mapping, candidate_info_captures)
+                        else:
+                            self.work_with_value(field_name, field_type, fields_in_field_value, form_id, revieved_field_mapping, candidate_info_captures, field_list)
+            else:
+                if field_value != '':
+                    self.work_with_value(field_name, field_type, field_value, form_id, revieved_field_mapping, candidate_info_captures, field_list)
 
-    def get_ike_image(self, inf_v, captures):
+    def work_with_value(self, field_name, field_type, field_value, form_id, revieved_field_mapping, candidate_info_captures, field_list):
+        for field_mapping in revieved_field_mapping:
+            ike_field_label = field_mapping['IFM_IKE_FIELD_LABEL']
+            espeed_field_name = field_mapping['IFM_ESPEED_FIELD_NAME']
+            title_name = field_mapping['IFM_TITLE_NAME']
+            trackor_type = field_mapping['IFM_FIELD_TRACKOR_TYPE']
+            if ike_field_label == field_name:
+                espeed_field_name_in_list = ''
+                if len(field_list) > 0:
+                    for field in field_list:
+                        field_list_id = field['form_id']
+                        field_list_type = field['trackor_type']
+                        field_list_name = field['field_name']
+                        if field_list_id == form_id and field_list_type == trackor_type and field_list_name == espeed_field_name:
+                            espeed_field_name_in_list = espeed_field_name
+                            break
+                if espeed_field_name_in_list == '' and field_value != None:
+                    value = self.work_with_value_type(field_type, field_value, title_name, candidate_info_captures)
+                    self.add_value_in_list(value, form_id, trackor_type, espeed_field_name, field_list)
+
+    def work_with_value_type(self, field_type, field_value, title_name, candidate_info_captures):
+        if isinstance(field_value, float) or isinstance(field_value, bool):
+            field_value = str(field_value)
+
+        if field_type == 'location' and 'longitude' in field_value:
+            field_value = str(field_value['longitude'])
+        elif field_type == 'location' and 'latitude' in field_value:
+            field_value = str(field_value['latitude'])
+        elif field_type == 'nestedlist':
+            if title_name != None:
+                if isinstance(field_value, list):
+                    for title in field_value:
+                        if title_name in title['title']:
+                            field_value = title['value']
+                            break
+                else:
+                    if title_name in field_value['title']:
+                        field_value = field_value['value']
+        elif field_type == 'selectlist' and 'title' in field_value:
+            if field_value != 'unselected':
+                field_value = field_value['title']
+            else:
+                field_value = None
+        elif field_type == 'vector' and 'distance' in field_value:
+            field_value = str(float(field_value['distance']) / .3048)
+        elif field_type == 'image':
+            field_value = self.get_ike_image(field_value, candidate_info_captures)
+        elif field_type == 'truesizecapture' in field_type:
+            field_value = self.get_ike_image(field_value, candidate_info_captures)
+        elif field_type == 'height' and field_value != None:
+            field_value = str(float(field_value) / .3048)
+        else: field_value = field_value.title()
+
+        return field_value
+
+    def get_ike_image(self, field_value, captures):
         for collect in captures:
-            if re.search(inf_v, collect['id']) is not None and collect['type'] == 'image':
-                inf_value = collect['imageUrl']
-                break
-            elif re.search(inf_v, collect['id']) is not None and collect['type'] == 'truesize':
-                inf_value = collect['compositeUrl']
-                if re.search('meters', inf_value) is not None:
-                    inf_value = inf_value.replace('meters', 'feet')
+            if re.search(field_value, collect['id']) is not None:
+                if collect['type'] == 'image':
+                    field_value = collect['imageUrl']
+                elif collect['type'] == 'truesize':
+                    field_value = collect['compositeUrl']
+                if re.search('meters', field_value) is not None:
+                    field_value = field_value.replace('meters', 'feet')
                 break
 
-        if len(inf_value) > 0:
-            image_name = re.split('/',inf_value)
+        if 'https' in field_value:
+            image_name = re.split('/',field_value)
             image_name = image_name[len(image_name)-1]
-            image = requests.get(inf_value, headers={'Accept':'application/json'})
+
+            image = requests.get(field_value, headers={'Accept':'application/json'})
             img_file = open(image_name, 'wb')
             img_file.write(image.content)
             img_file.close
 
-            return 'IKE_image.' + image_name
+            return image_name
         else:
             return None
+
+    def add_value_in_list(self, field_value, form_id, trackor_type, field_name, field_list):
+        if form_id != '':
+            field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':field_name, 'field_value':field_value})
+        else:
+            field_list.append({'form_id':'', 'trackor_type':trackor_type, 'field_name':field_name, 'field_value':field_value})
 
     def work_with_checklists(self, field_list):
         candidate_id = 0
         candidate_name = None
         data_checklists = []
         for field_data in field_list:
-            if re.search('Candidate.TRACKOR_KEY', field_data['trackor_type']) is not None:
+            if field_data['trackor_type'] == 'Candidate':
                 try:
                     data_checklists = self.get_checklist(field_data['field_value'])
                 except Exception as e:
@@ -382,61 +371,65 @@ class Integration():
         equipment_list = []
         image_list = []
         for field_data in field_list:
-            if 'IKE_Checklists' in field_data['trackor_type']:
-                checklists_dict[re.split('IKE_Checklists.', field_data['trackor_type'])[1]] = field_data['field_value']
-            elif 'Candidate' in field_data['trackor_type']:
-                candidate_dict[field_data['trackor_type']] = field_data['field_value']
-            elif 'IKE_POLE_PLACEMENT' in field_data['trackor_type']:
+            field_name = field_data['field_name']
+            field_value = field_data['field_value']
+            trackor_type = field_data['trackor_type']
+            form_id = field_data['form_id']
+            if '.jpeg' in field_value:
+                image_list.append({'trackor_type':field_name, 'file_name':field_value})
+            if trackor_type == 'IKE Checklists':
+                checklists_dict[field_name] = field_data['field_value']
+            if trackor_type == 'Candidate':
+                candidate_dict[field_name] = field_data['field_value']
+            if trackor_type == 'IKE Pole Placement':
                 if len(placement_list) > 0:
                     for pl in placement_list:
-                        if field_data['ike_id'] == pl['ike_id']:
-                            pl.update({'ike_id':field_data['ike_id'], re.split('IKE_POLE_PLACEMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
-                            placement_id = field_data['ike_id']
+                        if form_id == pl['form_id']:
+                            pl.update({'form_id':form_id, field_name:field_value})
+                            placement_id = form_id
                             break
-                    if placement_id != field_data['ike_id']:
-                        placement_list.append({'ike_id':field_data['ike_id'], re.split('IKE_POLE_PLACEMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
-                        placement_id = field_data['ike_id']
+                    if placement_id != form_id:
+                        placement_list.append({'form_id':form_id, field_name:field_value})
+                        placement_id = form_id
                 else:
-                    placement_list.append({'ike_id':field_data['ike_id'], re.split('IKE_POLE_PLACEMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
-                    placement_id = field_data['ike_id']
-            elif 'IKE_ANCHORS' in field_data['trackor_type']:
+                    placement_list.append({'form_id':form_id, field_name:field_value})
+                    placement_id = form_id
+            if trackor_type == 'IKE Anchors':
                 if len(anchors_list) > 0:
                     for al in anchors_list:
-                        if field_data['ike_id'] == al['ike_id']:
-                            al.update({'ike_id':field_data['ike_id'], re.split('IKE_ANCHORS.', field_data['trackor_type'])[1]:field_data['field_value']})
-                            anchors_id = field_data['ike_id']
+                        if form_id == al['form_id']:
+                            al.update({'form_id':form_id, field_name:field_value})
+                            anchors_id = form_id
                             break
-                    if anchors_id != field_data['ike_id']:
-                        anchors_list.append({'ike_id':field_data['ike_id'], re.split('IKE_ANCHORS.', field_data['trackor_type'])[1]:field_data['field_value']})
+                    if anchors_id != form_id:
+                        anchors_list.append({'form_id':form_id, field_name:field_value})
                 else:
-                    anchors_list.append({'ike_id':field_data['ike_id'], re.split('IKE_ANCHORS.', field_data['trackor_type'])[1]:field_data['field_value']})
-                    anchors_id = field_data['ike_id']
-            elif 'IKE_Span' in field_data['trackor_type']:
+                    anchors_list.append({'form_id':form_id, field_name:field_value})
+                    anchors_id = form_id
+            if trackor_type == 'IKE Spans':
                 if len(spans_list) > 0:
                     for sl in spans_list:
-                        if field_data['ike_id'] == sl['ike_id']:
-                            sl.update({'ike_id':field_data['ike_id'], re.split('IKE_Span.', field_data['trackor_type'])[1]:field_data['field_value']})
-                            span_id = field_data['ike_id']
+                        if form_id == sl['form_id']:
+                            sl.update({'form_id':form_id, field_name:field_value})
+                            span_id = form_id
                             break
-                    if span_id != field_data['ike_id']:
-                        spans_list.append({'ike_id':field_data['ike_id'], re.split('IKE_Span.', field_data['trackor_type'])[1]:field_data['field_value']})
+                    if span_id != form_id:
+                        spans_list.append({'form_id':form_id, field_name:field_value})
                 else:
-                    spans_list.append({'ike_id':field_data['ike_id'], re.split('IKE_Span.', field_data['trackor_type'])[1]:field_data['field_value']})
-                    span_id = field_data['ike_id']
-            elif 'IKE_EQUIPMENT' in field_data['trackor_type']:
+                    spans_list.append({'form_id':form_id, field_name:field_value})
+                    span_id = form_id
+            if trackor_type == 'IKE Equipment':
                 if len(equipment_list) > 0:
                     for el in equipment_list:
-                        if field_data['ike_id'] == el['ike_id']:
-                            el.update({'ike_id':field_data['ike_id'], re.split('IKE_EQUIPMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
-                            equipment_id = field_data['ike_id']
+                        if form_id == el['form_id']:
+                            el.update({'form_id':form_id, field_name:field_value})
+                            equipment_id = form_id
                             break
-                    if equipment_id != field_data['ike_id']:
-                        equipment_list.append({'ike_id':field_data['ike_id'], re.split('IKE_EQUIPMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
+                    if equipment_id != form_id:
+                        equipment_list.append({'form_id':form_id, field_name:field_value})
                 else:
-                    equipment_list.append({'ike_id':field_data['ike_id'], re.split('IKE_EQUIPMENT.', field_data['trackor_type'])[1]:field_data['field_value']})
-                    equipment_id = field_data['ike_id']
-            elif 'IKE_image' in field_data['trackor_type']:
-                image_list.append({'trackor_type':re.split('IKE_image.', field_data['trackor_type'])[1], 'file_name':field_data['field_value']})
+                    equipment_list.append({'form_id':form_id, field_name:field_value})
+                    equipment_id = form_id
 
         if len(checklists_dict) > 0 and len(candidate_dict) > 0 and candidate_id == 0 and candidate_name == None:
             try:
@@ -472,7 +465,7 @@ class Integration():
         if candidate_name != None:                    
             if len(placement_list) > 0:
                 for pl in placement_list:
-                    pl.pop('ike_id', None)
+                    pl.pop('form_id', None)
                     try:
                         self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
@@ -482,7 +475,7 @@ class Integration():
 
             if len(anchors_list) > 0:
                 for al in anchors_list:
-                    al.pop('ike_id', None)
+                    al.pop('form_id', None)
                     try:
                         self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
@@ -492,7 +485,7 @@ class Integration():
 
             if len(spans_list) > 0:
                 for sl in spans_list:
-                    sl.pop('ike_id', None)
+                    sl.pop('form_id', None)
                     try:
                         self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
@@ -502,7 +495,7 @@ class Integration():
 
             if len(equipment_list) > 0:
                 for el in equipment_list:
-                    el.pop('ike_id', None)
+                    el.pop('form_id', None)
                     try:
                         self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
@@ -514,7 +507,7 @@ class Integration():
         url = 'https://' + self.url_onevizion + '/api/v3/trackors/' + str(candidate_id)
         data = checklists_dict
         answer = requests.put(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
-        if answer.ok == True:
+        if answer.ok:
             return answer
         else:
             raise Exception(answer.text)
@@ -524,7 +517,7 @@ class Integration():
         data = {'file_name':image_file['file_name']}
         files = {'file':(image_file['file_name'], open(image_file['file_name'], 'rb'))}
         answer = requests.post(url, files=files, params=data, headers={'Accept':'application/json'}, auth=self.auth_onevizion)
-        if answer.ok == True:
+        if answer.ok:
             return answer
         else:
             raise Exception(answer.text)
@@ -533,7 +526,7 @@ class Integration():
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/IKE_Checklists/trackors'
         data = {'Candidate.TRACKOR_KEY':candidate_id}
         answer = requests.get(url, headers=self.headers, params=data, auth=self.auth_onevizion)
-        if answer.ok == True:
+        if answer.ok:
             return answer.json()
         else:
             raise Exception(answer.text)
@@ -542,7 +535,7 @@ class Integration():
         url = 'https://' + self.url_onevizion + '/api/v3/trackor_types/' + chield_trackor + '/trackors'
         data = {'fields':chield_dict, 'parents':[{'trackor_type':parent_trackor, 'filter':parent_dict}]}
         answer = requests.post(url, data=json.dumps(data), headers=self.headers, auth=self.auth_onevizion)
-        if answer.ok == True:
+        if answer.ok:
             return answer.json()
         else:
             raise Exception(answer.text)
