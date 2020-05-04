@@ -428,7 +428,7 @@ class Integration():
             try:
                 answer = self.create_trackors('IKE_Checklists', checklists_dict, 'Candidate', candidate_dict)
             except Exception as e:
-                self.log('Failed to create IKE Checklist for ' + str(candidate_dict['Candidate.TRACKOR_KEY']) + '. Exception [%s]' % str(e))
+                self.log('Failed to create IKE Checklist for Candidate ' + str(candidate_dict['TRACKOR_KEY']) + '. Exception [%s]' % str(e))
                 answer = None
 
             if answer != None:
