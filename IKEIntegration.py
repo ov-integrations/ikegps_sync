@@ -370,10 +370,13 @@ class Integration():
             form_id = field_data['form_id']
             if '.jpeg' in field_value:
                 image_list.append({'trackor_type':field_name, 'file_name':field_value})
+                continue
             if trackor_type == 'IKE Checklists':
                 checklists_dict[field_name] = field_data['field_value']
+                continue
             if trackor_type == 'Candidate':
                 candidate_dict[field_name] = field_data['field_value']
+                continue
             if trackor_type == 'IKE Pole Placement':
                 if len(placement_list) > 0:
                     for pl in placement_list:
@@ -387,6 +390,7 @@ class Integration():
                 else:
                     placement_list.append({'form_id':form_id, field_name:field_value})
                     placement_id = form_id
+                continue
             if trackor_type == 'IKE Anchors':
                 if len(anchors_list) > 0:
                     for al in anchors_list:
@@ -399,6 +403,7 @@ class Integration():
                 else:
                     anchors_list.append({'form_id':form_id, field_name:field_value})
                     anchors_id = form_id
+                continue
             if trackor_type == 'IKE Spans':
                 if len(spans_list) > 0:
                     for sl in spans_list:
@@ -411,6 +416,7 @@ class Integration():
                 else:
                     spans_list.append({'form_id':form_id, field_name:field_value})
                     span_id = form_id
+                continue
             if trackor_type == 'IKE Equipment':
                 if len(equipment_list) > 0:
                     for el in equipment_list:
