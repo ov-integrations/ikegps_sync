@@ -209,7 +209,7 @@ class Integration():
 
     def get_fields_mapping(self):
         self.fm_list_request.read(
-                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_IKE_FIELD_LABEL', 'IFM_TITLE_NAME']
+                fields=['IFM_FIELD_TRACKOR_TYPE', 'IFM_ESPEED_FIELD_NAME', 'IFM_IKE_FORM_ID', 'IFM_IKE_FIELD_NAME', 'IFM_IKE_FIELD_LABEL', 'IFM_TITLE_NAME']
                 )
         if len(self.fm_list_request.errors) > 0:
             raise SystemExit(self.fm_list_request.errors)
@@ -260,10 +260,11 @@ class Integration():
     def checking_value(self, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list):
         for field_mapping in fields_mapping:
             ike_field_label = field_mapping['IFM_IKE_FIELD_LABEL']
+            ike_field_name = field_mapping['IFM_IKE_FIELD_NAME']
             espeed_field_name = field_mapping['IFM_ESPEED_FIELD_NAME']
             title_name = field_mapping['IFM_TITLE_NAME']
             trackor_type = field_mapping['IFM_FIELD_TRACKOR_TYPE']
-            if ike_field_label == field_name:
+            if ike_field_label == field_name and field_type in ike_field_name:
                 espeed_field_name_in_list = ''
                 if len(out_field_list) > 0:
                     for field in out_field_list:
@@ -275,7 +276,8 @@ class Integration():
                             break
                 if espeed_field_name_in_list == '' and field_value != None:
                     value = self.prepare_value_to_add_to_list(field_type, field_value, title_name, candidate_info_captures)
-                    out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
+                    if value != None:
+                        out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
 
     def prepare_value_to_add_to_list(self, field_type, field_value, title_name, candidate_info_captures):
         if isinstance(field_value, float) or isinstance(field_value, bool):
@@ -286,7 +288,9 @@ class Integration():
         elif field_type == 'location' and 'latitude' in field_value:
             field_value = str(field_value['latitude'])
         elif field_type == 'nestedlist':
-            if title_name != None:
+            if title_name == None:
+                field_value = field_value['value']
+            else:
                 if isinstance(field_value, list):
                     for title in field_value:
                         if title_name in title['title']:
@@ -295,11 +299,13 @@ class Integration():
                 else:
                     if title_name in field_value['title']:
                         field_value = field_value['value']
+                if isinstance(field_value, dict):
+                    field_value = None
         elif field_type == 'selectlist' and 'title' in field_value:
-            if field_value != 'unselected':
-                field_value = field_value['title']
-            else:
+            if field_value['value'] == 'unselected':
                 field_value = None
+            else:
+                field_value = field_value['title']
         elif field_type == 'vector' and 'distance' in field_value:
             field_value = str(float(field_value['distance']) / .3048)
         elif field_type == 'image':
