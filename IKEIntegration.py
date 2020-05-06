@@ -275,17 +275,17 @@ class Integration():
                             espeed_field_name_in_list = espeed_field_name
                             break
                 if espeed_field_name_in_list == '' and field_value != None:
-                    value = self.prepare_value_to_add_to_list(field_type, field_value, title_name, candidate_info_captures)
+                    value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
                     if value != None:
                         out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
 
-    def prepare_value_to_add_to_list(self, field_type, field_value, title_name, candidate_info_captures):
+    def prepare_value_to_add_to_list(self, field_type, field_value, espeed_field_name, title_name, candidate_info_captures):
         if isinstance(field_value, float) or isinstance(field_value, bool):
             field_value = str(field_value)
 
-        if field_type == 'location' and 'longitude' in field_value:
+        if field_type == 'location' and 'longitude' in field_value and '_LONG' in espeed_field_name:
             field_value = str(field_value['longitude'])
-        elif field_type == 'location' and 'latitude' in field_value:
+        elif field_type == 'location' and 'latitude' in field_value and '_LAT' in espeed_field_name:
             field_value = str(field_value['latitude'])
         elif field_type == 'nestedlist':
             if title_name == None:
