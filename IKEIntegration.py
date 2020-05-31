@@ -26,7 +26,7 @@ class Integration():
         self.log('Starting integration')
         fields_mapping = self.get_fields_mapping()
         ike_candidates_data = self.prepare_ike_candidates_data(fields_mapping)
-        if ike_candidates_data != None:
+        if ike_candidates_data is not None:
             self.parse_ike_candidates_data(ike_candidates_data, fields_mapping)
         self.log('Integration has been completed')
 
@@ -82,7 +82,6 @@ class Integration():
                 if job['updatedAt'] > previous_week:
                     ike_job_list.append({'job_id':job['id'], 'job_name':job['name'], 'department_id':department_id})
 
-        department_list.clear()
         return ike_job_list
 
     def get_job_list(self, department_id):
@@ -128,8 +127,6 @@ class Integration():
 
         if len(incorrect_name_list) > 0:
             self.log(incorrect_name_list)
-            incorrect_name_list.clear()
-        ike_job_list.clear()
         return ike_collections_list
 
     def get_collection_list(self, department_id, job_id):
@@ -173,9 +170,7 @@ class Integration():
 
         if len(candidate_missing_list) > 0:
             self.log(candidate_missing_list)
-            candidate_missing_list.clear()
 
-        candidate_list.clear()
         if len(ike_candidate_list) > 0:
             return ike_candidate_list
         else:
@@ -231,7 +226,6 @@ class Integration():
                 field_list.append({'form_id':form_id, 'trackor_type':'IKE Checklists', 'field_name':'IKE_UPDATED_AT', 'field_value':candidate_info_updated_at})
 
                 self.field_list_parsing(field_list)
-                field_list.clear()
                 file_list = [f for f in os.listdir() if f.endswith('.jpeg')]
                 for f in file_list:
                     os.remove(os.path.join(f))
@@ -275,9 +269,9 @@ class Integration():
                         if field_list_id == form_id and field_list_type == trackor_type and field_list_name == espeed_field_name:
                             espeed_field_name_in_list = espeed_field_name
                             break
-                if espeed_field_name_in_list == '' and field_value != None:
+                if espeed_field_name_in_list == '' and field_value is not None:
                     value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
-                    if value != None:
+                    if value is not None:
                         out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
 
     def prepare_value_to_add_to_list(self, field_type, field_value, espeed_field_name, title_name, candidate_info_captures):
@@ -313,7 +307,7 @@ class Integration():
             field_value = self.get_ike_image(field_value, candidate_info_captures)
         elif field_type == 'truesizecapture' in field_type:
             field_value = self.get_ike_image(field_value, candidate_info_captures)
-        elif field_type == 'height' and field_value != None:
+        elif field_type == 'height' and field_value is not None:
             field_value = str(float(field_value) / .3048)
         else: field_value = field_value.title()
 
@@ -375,11 +369,11 @@ class Integration():
             field_value = field_data['field_value']
             trackor_type = field_data['trackor_type']
             form_id = field_data['form_id']
-            if '.jpeg' in field_value:
-                image_list.append({'trackor_type':field_name, 'file_name':field_value})
-                continue
             if trackor_type == 'IKE Checklists':
-                checklists_dict[field_name] = field_data['field_value']
+                if '.jpeg' in field_value:
+                    image_list.append({'trackor_type':field_name, 'file_name':field_value})
+                else:
+                    checklists_dict[field_name] = field_data['field_value']
                 continue
             if trackor_type == 'Candidate':
                 candidate_dict[field_name] = field_data['field_value']
@@ -444,10 +438,9 @@ class Integration():
                 self.log('Failed to create IKE Checklist for Candidate ' + str(candidate_dict['TRACKOR_KEY']) + '. Exception [%s]' % str(e))
                 answer = None
 
-            if answer != None:
+            if answer is not None:
                 candidate_id = answer['TRACKOR_ID']
                 candidate_name = answer['TRACKOR_KEY']
-                candidate_dict.clear()
                 checklists_dict.clear()
 
         if candidate_id != 0:
@@ -457,8 +450,6 @@ class Integration():
                 except Exception as e:
                     self.log('Failed to update IKE Checklist for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                checklists_dict.clear()
-
             if len(image_list) > 0:
                 for image_file in image_list:
                     try:
@@ -466,48 +457,98 @@ class Integration():
                     except Exception as e:
                         self.log('Failed to attach image file for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                image_list.clear()
-
-        if candidate_name != None:                    
+        if candidate_name is not None:                    
             if len(placement_list) > 0:
+                pl_image_file_list = []
                 for pl in placement_list:
                     pl.pop('form_id', None)
+                    for item in list(pl.items()):
+                        if 'jpeg' in item[1]:
+                            pl_image_file_list.append({'trackor_type':item[0], 'file_name':item[1]})
+                            pl.pop(item[0], None)
                     try:
-                        self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                        answer = self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
                         self.log('Failed to create IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        answer = None
 
-                placement_list.clear()
+                    if answer is not None and len(pl_image_file_list) > 0:
+                        for pl_image_file in pl_image_file_list:
+                            try:
+                                self.attach_image_file(answer['TRACKOR_ID'], pl_image_file)
+                            except Exception as e:
+                                self.log('Failed to attach image file IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+
+                        pl_image_file_list.clear()
 
             if len(anchors_list) > 0:
+                al_image_file_list = []
                 for al in anchors_list:
                     al.pop('form_id', None)
+                    for item in list(al.items()):
+                        if 'jpeg' in item[1]:
+                            al_image_file_list.append({'trackor_type':item[0], 'file_name':item[1]})
+                            al.pop(item[0], None)
                     try:
-                        self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                        answer = self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
                         self.log('Failed to create IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        answer = None
+                    
+                    if answer is not None and len(al_image_file_list) > 0:
+                        for al_image_file in al_image_file_list:
+                            try:
+                                self.attach_image_file(answer['TRACKOR_ID'], al_image_file)
+                            except Exception as e:
+                                self.log('Failed to attach image file IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                anchors_list.clear()
+                        al_image_file_list.clear()
 
             if len(spans_list) > 0:
+                sl_image_file_list = []
                 for sl in spans_list:
                     sl.pop('form_id', None)
+                    for item in list(sl.items()):
+                        if 'jpeg' in item[1]:
+                            sl_image_file_list.append({'trackor_type':item[0], 'file_name':item[1]})
+                            sl.pop(item[0], None)
                     try:
-                        self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                        answer = self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
                         self.log('Failed to create IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        answer = None
+                    
+                    if answer is not None and len(sl_image_file_list) > 0:
+                        for sl_image_file in sl_image_file_list:
+                            try:
+                                self.attach_image_file(answer['TRACKOR_ID'], sl_image_file)
+                            except Exception as e:
+                                self.log('Failed to attach image file IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                spans_list.clear()
+                        sl_image_file_list.clear()
 
             if len(equipment_list) > 0:
+                el_image_file_list = []
                 for el in equipment_list:
                     el.pop('form_id', None)
+                    for item in list(el.items()):
+                        if 'jpeg' in item[1]:
+                            el_image_file_list.append({'trackor_type':item[0], 'file_name':item[1]})
+                            el.pop(item[0], None)
                     try:
-                        self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
+                        answer = self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
                         self.log('Failed to create IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        answer = None
+                    
+                    if answer is not None and len(el_image_file_list) > 0:
+                        for el_image_file in el_image_file_list:
+                            try:
+                                self.attach_image_file(answer['TRACKOR_ID'], el_image_file)
+                            except Exception as e:
+                                self.log('Failed to attach image file IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                equipment_list.clear()
+                        el_image_file_list.clear()
 
     def update_checklist_data(self, candidate_id, checklists_dict):
         url = 'https://' + self.url_onevizion + '/api/v3/trackors/' + str(candidate_id)
@@ -518,8 +559,8 @@ class Integration():
         else:
             raise Exception(answer.text)
 
-    def attach_image_file(self, candidate_id, image_file):
-        url = 'https://' + self.url_onevizion + '/api/v3/trackor/' + str(candidate_id) + '/file/' + image_file['trackor_type']
+    def attach_image_file(self, trackor_id, image_file):
+        url = 'https://' + self.url_onevizion + '/api/v3/trackor/' + str(trackor_id) + '/file/' + image_file['trackor_type']
         data = {'file_name':image_file['file_name']}
         files = {'file':(image_file['file_name'], open(image_file['file_name'], 'rb'))}
         answer = requests.post(url, files=files, params=data, headers={'Accept':'application/json'}, auth=self.auth_onevizion)
