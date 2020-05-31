@@ -241,6 +241,7 @@ class Integration():
     def get_data_from_fields(self, form_id, candidate_info_fields, out_field_list, fields_mapping, candidate_info_captures):
         candidate_info_fields.sort(key=lambda val: isinstance(val['value'], list))
         for fields_info in candidate_info_fields:
+            field_id = fields_info['field']
             field_name = fields_info['name']
             field_type = fields_info['type']
             field_value = fields_info['value']
@@ -252,19 +253,19 @@ class Integration():
                             fields_in_value = fields_in_field_value['fields']
                             self.get_data_from_fields(form_id, fields_in_value, out_field_list, fields_mapping, candidate_info_captures)
                         else:
-                            self.checking_value(field_name, field_type, fields_in_field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
+                            self.checking_value(field_id, field_name, field_type, fields_in_field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
             else:
                 if field_value != '':
-                    self.checking_value(field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
+                    self.checking_value(field_id, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
 
-    def checking_value(self, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list):
+    def checking_value(self, field_id, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list):
         for field_mapping in fields_mapping:
             ike_field_label = field_mapping['IFM_IKE_FIELD_LABEL']
             ike_field_name = field_mapping['IFM_IKE_FIELD_NAME']
             espeed_field_name = field_mapping['IFM_ESPEED_FIELD_NAME']
             title_name = field_mapping['IFM_TITLE_NAME']
             trackor_type = field_mapping['IFM_FIELD_TRACKOR_TYPE']
-            if ike_field_label == field_name and field_type in ike_field_name:
+            if ike_field_label == field_name and field_id == ike_field_name:
                 espeed_field_name_in_list = ''
                 if len(out_field_list) > 0:
                     for field in out_field_list:
