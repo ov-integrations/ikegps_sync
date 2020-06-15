@@ -229,6 +229,7 @@ class Integration():
                 file_list = [f for f in os.listdir() if f.endswith('.jpeg')]
                 for f in file_list:
                     os.remove(os.path.join(f))
+                field_list.clear()
             else:
                 self.log('No data / failed to select data for Candidate ' + candidate_info['C_CANDIDATE_NAME'])
    
@@ -479,7 +480,7 @@ class Integration():
                             except Exception as e:
                                 self.log('Failed to attach image file IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                        pl_image_file_list.clear()
+                    pl_image_file_list.clear()
 
             if len(anchors_list) > 0:
                 al_image_file_list = []
@@ -502,7 +503,7 @@ class Integration():
                             except Exception as e:
                                 self.log('Failed to attach image file IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                        al_image_file_list.clear()
+                    al_image_file_list.clear()
 
             if len(spans_list) > 0:
                 sl_image_file_list = []
@@ -525,7 +526,7 @@ class Integration():
                             except Exception as e:
                                 self.log('Failed to attach image file IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                        sl_image_file_list.clear()
+                    sl_image_file_list.clear()
 
             if len(equipment_list) > 0:
                 el_image_file_list = []
@@ -548,7 +549,7 @@ class Integration():
                             except Exception as e:
                                 self.log('Failed to attach image file IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
 
-                        el_image_file_list.clear()
+                    el_image_file_list.clear()
 
     def update_checklist_data(self, candidate_id, checklists_dict):
         url = 'https://' + self.url_onevizion + '/api/v3/trackors/' + str(candidate_id)
