@@ -240,6 +240,9 @@ class Integration():
             field_name = fields_info['name']
             field_type = fields_info['type']
             field_value = fields_info['value']
+            field_provider = None
+            if 'provider' in fields_info:
+                field_provider = fields_info['provider']
             if isinstance(field_value, list):
                 if len(field_value) > 0:
                     for fields_in_field_value in field_value:
@@ -248,12 +251,12 @@ class Integration():
                             fields_in_value = fields_in_field_value['fields']
                             self.get_data_from_fields(form_id, fields_in_value, out_field_list, fields_mapping, candidate_info_captures)
                         else:
-                            self.checking_value(field_id, field_name, field_type, fields_in_field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
+                            self.checking_value(field_id, field_name, field_type, fields_in_field_value, field_provider, form_id, fields_mapping, candidate_info_captures, out_field_list)
             else:
                 if field_value != '':
-                    self.checking_value(field_id, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list)
+                    self.checking_value(field_id, field_name, field_type, field_value, field_provider, form_id, fields_mapping, candidate_info_captures, out_field_list)
 
-    def checking_value(self, field_id, field_name, field_type, field_value, form_id, fields_mapping, candidate_info_captures, out_field_list):
+    def checking_value(self, field_id, field_name, field_type, field_value, field_provider, form_id, fields_mapping, candidate_info_captures, out_field_list):
         for field_mapping in fields_mapping:
             ike_field_label = field_mapping['IFM_IKE_FIELD_LABEL']
             ike_field_name = field_mapping['IFM_IKE_FIELD_NAME']
@@ -270,8 +273,12 @@ class Integration():
                         if field_list_id == form_id and field_list_type == trackor_type and field_list_name == espeed_field_name:
                             espeed_field_name_in_list = espeed_field_name
                             break
-                if espeed_field_name_in_list == '' and field_value is not None:
-                    value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
+                if espeed_field_name_in_list == '':
+                    value = None
+                    if field_provider is not None and ('IKE_GPS_HEIGHT' in espeed_field_name or 'IKE_GPS_VERT_UNDULATION' in espeed_field_name):
+                        value = self.prepare_value_to_add_to_list(field_type, field_provider, espeed_field_name, title_name, candidate_info_captures)
+                    elif field_value is not None:
+                        value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
                     if value is not None:
                         out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
 
@@ -283,6 +290,14 @@ class Integration():
             field_value = str(field_value['longitude'])
         elif field_type == 'location' and 'latitude' in field_value and '_LAT' in espeed_field_name:
             field_value = str(field_value['latitude'])
+        elif field_type == 'location' and 'altitude' in field_value and 'ALTITUDE' in espeed_field_name:
+            field_value = str(field_value['altitude'])
+        elif field_type == 'location' and 'accuracy' in field_value and 'ACCURACY' in espeed_field_name:
+            field_value = str(field_value['accuracy'])
+        elif 'antennaHeight' in field_value and 'IKE_GPS_HEIGHT' in espeed_field_name:
+            field_value = str(field_value['antennaHeight'])
+        elif 'undulation' in field_value and 'IKE_GPS_VERT_UNDULATION' in espeed_field_name:
+            field_value = str(field_value['undulation'])
         elif field_type == 'nestedlist':
             if title_name == None:
                 field_value = field_value['value']
