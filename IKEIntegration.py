@@ -219,11 +219,13 @@ class Integration():
             candidate_info_fields = ike_collection['fields']
             candidate_info_captures = ike_collection['captures']
             candidate_info_updated_at = ike_collection['updatedAt']
+            candidate_info_collected_at = ike_collection['collectedAt']
             self.get_data_from_fields(form_id, candidate_info_fields, field_list, fields_mapping, candidate_info_captures)
 
             if len(field_list) > 0:
                 field_list.append({'form_id':form_id, 'trackor_type':'Candidate', 'field_name':'TRACKOR_KEY', 'field_value':candidate_info['TRACKOR_KEY']})
                 field_list.append({'form_id':form_id, 'trackor_type':'IKE Checklists', 'field_name':'IKE_UPDATED_AT', 'field_value':candidate_info_updated_at})
+                field_list.append({'form_id':form_id, 'trackor_type':'IKE Checklists', 'field_name':'IKE_CAPTURE_DATE', 'field_value':candidate_info_collected_at})
 
                 self.field_list_parsing(field_list)
                 file_list = [f for f in os.listdir() if f.endswith('.jpeg')]
