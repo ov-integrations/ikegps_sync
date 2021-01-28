@@ -34,14 +34,14 @@ class Integration():
         try:
             self.ike_token = self.get_ike_token()
         except Exception as e:
-            self.log('Failed to get_ike_token. Exception[%s]' % str(e))
-            raise SystemExit('Failed to get_ike_token. Exception[%s]' % str(e))
+            self.log(f'Failed to get_ike_token. Exception[{str(e)}]')
+            raise SystemExit(f'Failed to get_ike_token. Exception[{str(e)}]')
 
         try:
             department_list = self.get_ike_department()
         except Exception as e:
-            self.log('Failed to get_ike_department. Exception[%s]' % str(e))
-            raise SystemExit('Failed to get_ike_department. Exception[%s]' % str(e))
+            self.log(f'Failed to get_ike_department. Exception[{str(e)}]')
+            raise SystemExit(f'Failed to get_ike_department. Exception[{str(e)}]')
 
         ike_job_list = self.get_ike_job_list(department_list)
         ike_collection_list = self.get_ike_collection_list(ike_job_list, fields_mapping)
@@ -74,8 +74,8 @@ class Integration():
             try:
                 job_list = self.get_job_list(department_id)
             except Exception as e:
-                self.log('Failed to get_job_list. Exception [%s]' % str(e))
-                raise SystemExit('Failed to get_job_list. Exception [%s]' % str(e))
+                self.log(f'Failed to get_job_list. Exception [{str(e)}]')
+                raise SystemExit(f'Failed to get_job_list. Exception [{str(e)}]')
 
             ike_job_list = []
             for job in job_list:
@@ -106,8 +106,8 @@ class Integration():
             try:
                 collection_list = self.get_collection_list(ike_job['department_id'], ike_job['job_id'])
             except Exception as e:
-                self.log('Failed to get_collection_list. Exception [%s]' % str(e))
-                raise SystemExit('Failed to get_collection_list. Exception [%s]' % str(e))
+                self.log(f'Failed to get_collection_list. Exception [{str(e)}]')
+                raise SystemExit(f'Failed to get_collection_list. Exception [{str(e)}]')
 
             for ike_collection in collection_list:
                 if ike_collection['form']['id'] not in form_id_list:
@@ -181,8 +181,8 @@ class Integration():
         try:
             cadidates = self.get_candidates(candidate_name_list)
         except Exception as e:
-            self.log('Failed to get_candidates. Exception [%s]' % str(e))
-            raise SystemExit('Failed to get_candidates. Exception [%s]' % str(e))
+            self.log(f'Failed to get_candidates. Exception [{str(e)}]')
+            raise SystemExit(f'Failed to get_candidates. Exception [{str(e)}]')
 
         for candidate in cadidates:
             candidate_list.append({'TRACKOR_KEY': candidate['TRACKOR_KEY'], 'C_CANDIDATE_NAME': candidate['C_CANDIDATE_NAME'], 'IKE_Checklists.IKE_UPDATED_AT': candidate['IKE_Checklists.IKE_UPDATED_AT']})
@@ -233,7 +233,7 @@ class Integration():
                     os.remove(os.path.join(f))
                 field_list.clear()
             else:
-                self.log('No data / failed to select data for Candidate ' + candidate_info['C_CANDIDATE_NAME'])
+                self.log(f'No data / failed to select data for Candidate {candidate_info["C_CANDIDATE_NAME"]}')
    
     def get_data_from_fields(self, form_id, candidate_info_fields, out_field_list, fields_mapping, candidate_info_captures):
         candidate_info_fields.sort(key=lambda val: isinstance(val['value'], list))
@@ -364,7 +364,7 @@ class Integration():
                 try:
                     data_checklists = self.get_checklist(field_data['field_value'])
                 except Exception as e:
-                    self.log('Failed to get_checklist. Exception [%s]' % str(e))
+                    self.log(f'Failed to get_checklist. Exception [{str(e)}]')
 
                 if len(data_checklists) > 0:
                     candidate_id = data_checklists[0]['TRACKOR_ID']
@@ -453,7 +453,7 @@ class Integration():
             try:
                 answer = self.create_trackors('IKE_Checklists', checklists_dict, 'Candidate', candidate_dict)
             except Exception as e:
-                self.log('Failed to create IKE Checklist for Candidate ' + str(candidate_dict['TRACKOR_KEY']) + '. Exception [%s]' % str(e))
+                self.log(f'Failed to create IKE Checklist for Candidate {str(candidate_dict["TRACKOR_KEY"])}. Exception [{str(e)}]')
                 answer = None
 
             if answer is not None:
@@ -466,14 +466,14 @@ class Integration():
                 try:
                     self.update_checklist_data(candidate_id, checklists_dict)
                 except Exception as e:
-                    self.log('Failed to update IKE Checklist for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                    self.log(f'Failed to update IKE Checklist for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
             if len(image_list) > 0:
                 for image_file in image_list:
                     try:
                         self.attach_image_file(candidate_id, image_file)
                     except Exception as e:
-                        self.log('Failed to attach image file for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        self.log(f'Failed to attach image file for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
         if candidate_name is not None:                    
             if len(placement_list) > 0:
@@ -487,7 +487,7 @@ class Integration():
                     try:
                         answer = self.create_trackors('IKE_POLE_PLACEMENT', pl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
-                        self.log('Failed to create IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        self.log(f'Failed to create IKE Pole Placement for Candidate {str(candidate_name)}. Exception [{str(e)}]')
                         answer = None
 
                     if answer is not None and len(pl_image_file_list) > 0:
@@ -495,7 +495,7 @@ class Integration():
                             try:
                                 self.attach_image_file(answer['TRACKOR_ID'], pl_image_file)
                             except Exception as e:
-                                self.log('Failed to attach image file IKE Pole Placement for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                                self.log(f'Failed to attach image file IKE Pole Placement for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
                     pl_image_file_list.clear()
 
@@ -510,7 +510,7 @@ class Integration():
                     try:
                         answer = self.create_trackors('IKE_ANCHORS', al, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
-                        self.log('Failed to create IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        self.log(f'Failed to create IKE Anchors for Candidate {str(candidate_name)}. Exception [{str(e)}]')
                         answer = None
                     
                     if answer is not None and len(al_image_file_list) > 0:
@@ -518,7 +518,7 @@ class Integration():
                             try:
                                 self.attach_image_file(answer['TRACKOR_ID'], al_image_file)
                             except Exception as e:
-                                self.log('Failed to attach image file IKE Anchors for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                                self.log(f'Failed to attach image file IKE Anchors for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
                     al_image_file_list.clear()
 
@@ -533,7 +533,7 @@ class Integration():
                     try:
                         answer = self.create_trackors('IKE_Span', sl, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
-                        self.log('Failed to create IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        self.log(f'Failed to create IKE Span for Candidate {str(candidate_name)}. Exception [{str(e)}]')
                         answer = None
                     
                     if answer is not None and len(sl_image_file_list) > 0:
@@ -541,7 +541,7 @@ class Integration():
                             try:
                                 self.attach_image_file(answer['TRACKOR_ID'], sl_image_file)
                             except Exception as e:
-                                self.log('Failed to attach image file IKE Span for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                                self.log(f'Failed to attach image file IKE Span for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
                     sl_image_file_list.clear()
 
@@ -556,7 +556,7 @@ class Integration():
                     try:
                         answer = self.create_trackors('IKE_EQUIPMENT', el, 'IKE_Checklists', {'TRACKOR_KEY':candidate_name})
                     except Exception as e:
-                        self.log('Failed to create IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                        self.log(f'Failed to create IKE Equipment for Candidate {str(candidate_name)}. Exception [{str(e)}]')
                         answer = None
                     
                     if answer is not None and len(el_image_file_list) > 0:
@@ -564,7 +564,7 @@ class Integration():
                             try:
                                 self.attach_image_file(answer['TRACKOR_ID'], el_image_file)
                             except Exception as e:
-                                self.log('Failed to attach image file IKE Equipment for Candidate ' + str(candidate_name) + '. Exception [%s]' % str(e))
+                                self.log(f'Failed to attach image file IKE Equipment for Candidate {str(candidate_name)}. Exception [{str(e)}]')
 
                     el_image_file_list.clear()
 
