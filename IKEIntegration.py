@@ -243,7 +243,7 @@ class Integration():
             field_type = fields_info['type']
             field_value = fields_info['value']
             field_provider = None
-            if 'provider' in fields_info:
+            if 'provider' in fields_info and fields_info['provider']['type'] == 'gps':
                 field_provider = fields_info['provider']
             if isinstance(field_value, list):
                 if len(field_value) > 0:
@@ -321,13 +321,16 @@ class Integration():
                 field_value = field_value['title']
         elif field_type == 'vector' and 'distance' in field_value:
             field_value = str(float(field_value['distance']) / .3048)
-        elif field_type == 'image':
-            field_value = self.get_ike_image(field_value, candidate_info_captures)
-        elif field_type == 'truesizecapture' in field_type:
+        elif field_type == 'image' or field_type == 'truesizecapture':
             field_value = self.get_ike_image(field_value, candidate_info_captures)
         elif field_type == 'height' and field_value is not None:
             field_value = str(float(field_value) / .3048)
-        else: field_value = field_value.title()
+        else:
+            try:
+                field_value = field_value.title()
+            except Exception as e:
+                self.log(f'Failed to get field_value - {field_value} for {espeed_field_name}. Exception [{str(e)}]')
+                field_value = None
 
         return field_value
 
