@@ -215,6 +215,7 @@ class Integration():
         form_id = ''
         field_list = []
         for candidate_info in ike_candidates_data:
+            self.log(f'Getting data for Candidate {candidate_info["C_CANDIDATE_NAME"]}')
             ike_collection = candidate_info['ike_collection']
             candidate_info_fields = ike_collection['fields']
             candidate_info_captures = ike_collection['captures']
@@ -234,7 +235,7 @@ class Integration():
                 field_list.clear()
             else:
                 self.log(f'No data / failed to select data for Candidate {candidate_info["C_CANDIDATE_NAME"]}')
-   
+
     def get_data_from_fields(self, form_id, candidate_info_fields, out_field_list, fields_mapping, candidate_info_captures):
         candidate_info_fields.sort(key=lambda val: isinstance(val['value'], list))
         for fields_info in candidate_info_fields:
@@ -243,7 +244,7 @@ class Integration():
             field_type = fields_info['type']
             field_value = fields_info['value']
             field_provider = None
-            if 'provider' in fields_info and fields_info['provider']['type'] == 'gps':
+            if 'provider' in fields_info:
                 field_provider = fields_info['provider']
             if isinstance(field_value, list):
                 if len(field_value) > 0:
@@ -278,9 +279,16 @@ class Integration():
                 if espeed_field_name_in_list == '':
                     value = None
                     if field_provider is not None and ('IKE_GPS_HEIGHT' in espeed_field_name or 'IKE_GPS_VERT_UNDULATION' in espeed_field_name):
-                        value = self.prepare_value_to_add_to_list(field_type, field_provider, espeed_field_name, title_name, candidate_info_captures)
+                        try:
+                            value = self.prepare_value_to_add_to_list(field_type, field_provider, espeed_field_name, title_name, candidate_info_captures)
+                        except Exception as e:
+                            self.log(f'Failed to get field_value - {field_provider} for {espeed_field_name}. Exception [{str(e)}]')
                     elif field_value is not None:
-                        value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
+                        try:
+                            value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
+                        except Exception as e:
+                            self.log(f'Failed to get field_value - {field_value} for {espeed_field_name}. Exception [{str(e)}]')
+
                     if value is not None:
                         out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
 
@@ -325,12 +333,7 @@ class Integration():
             field_value = self.get_ike_image(field_value, candidate_info_captures)
         elif field_type == 'height' and field_value is not None:
             field_value = str(float(field_value) / .3048)
-        else:
-            try:
-                field_value = field_value.title()
-            except Exception as e:
-                self.log(f'Failed to get field_value - {field_value} for {espeed_field_name}. Exception [{str(e)}]')
-                field_value = None
+        else: field_value = field_value.title()
 
         return field_value
 
