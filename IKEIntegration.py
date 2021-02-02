@@ -277,20 +277,17 @@ class Integration():
                             espeed_field_name_in_list = espeed_field_name
                             break
                 if espeed_field_name_in_list == '':
-                    value = None
-                    if field_provider is not None and ('IKE_GPS_HEIGHT' in espeed_field_name or 'IKE_GPS_VERT_UNDULATION' in espeed_field_name):
-                        try:
-                            value = self.prepare_value_to_add_to_list(field_type, field_provider, espeed_field_name, title_name, candidate_info_captures)
-                        except Exception as e:
-                            self.log(f'Failed to get field_value - {field_provider} for {espeed_field_name}. Exception [{str(e)}]')
-                    elif field_value is not None:
-                        try:
-                            value = self.prepare_value_to_add_to_list(field_type, field_value, espeed_field_name, title_name, candidate_info_captures)
-                        except Exception as e:
-                            self.log(f'Failed to get field_value - {field_value} for {espeed_field_name}. Exception [{str(e)}]')
+                    if field_value is not None or (field_provider is not None and ('IKE_GPS_HEIGHT' in espeed_field_name or 'IKE_GPS_VERT_UNDULATION' in espeed_field_name)):
+                        if 'IKE_GPS_HEIGHT' in espeed_field_name or 'IKE_GPS_VERT_UNDULATION' in espeed_field_name:
+                            tmp_field_value = field_provider
+                        else:
+                            tmp_field_value = field_value
 
-                    if value is not None:
-                        out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
+                        try:
+                            value = self.prepare_value_to_add_to_list(field_type, tmp_field_value, espeed_field_name, title_name, candidate_info_captures)
+                            out_field_list.append({'form_id':form_id, 'trackor_type':trackor_type, 'field_name':espeed_field_name, 'field_value':value})
+                        except Exception as e:
+                            self.log(f'Failed to get field_value - {tmp_field_value } for {espeed_field_name}. Exception [{str(e)}]')
 
     def prepare_value_to_add_to_list(self, field_type, field_value, espeed_field_name, title_name, candidate_info_captures):
         if isinstance(field_value, float) or isinstance(field_value, bool):
@@ -321,10 +318,10 @@ class Integration():
                     if title_name in field_value['title']:
                         field_value = field_value['value']
                 if isinstance(field_value, dict):
-                    field_value = None
+                    raise Exception(f'title {title_name} not found for the given value')
         elif field_type == 'selectlist' and 'title' in field_value:
             if field_value['value'] == 'unselected':
-                field_value = None
+                raise Exception('No value selected')
             else:
                 field_value = field_value['title']
         elif field_type == 'vector' and 'distance' in field_value:
